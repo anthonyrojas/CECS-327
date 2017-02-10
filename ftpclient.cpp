@@ -73,29 +73,29 @@ string requestReply(int s, string message)
 	return "";
 }
 
-int responseToPort(string response) {
-	int parenIndex = static_cast<int>(response.find("("));
+int responseToPort(string r) {
+	int i = static_cast<int>(r.find("("));
 	string parsedIP, strReply;
 	uint16_t a, b, c, d, e, f, first,second;
-	response = response.substr(parenIndex+1,static_cast<int>(response.size()));
-	int responseSize = static_cast<int>(response.find(")"));
-	replace(response.begin(), response.end(), ',', '.');
-    parsedIP = response.substr(0,responseSize);
-    sscanf(parsedIP.c_str(), "%hu.%hu.%hu.%hu.%hu.%hu.", &a, &b, &c, &d, &e, &f);
-    first = e << 8;
-    return first | f;
+	r = r.substr(i+1,static_cast<int>(r.size()));
+	int rSize = static_cast<int>(r.find(")"));
+	replace(r.begin(), r.end(), ',', '.');
+	parsedIP = r.substr(0,rSize);
+    	sscanf(parsedIP.c_str(), "%hu.%hu.%hu.%hu.%hu.%hu.", &a, &b, &c, &d, &e, &f);
+    	first = e << 8;
+    	return first | f;
 }
 
 
-string responseToIp(string response) {
-    int parenIndex = static_cast<int>(response.find("("));
+string responseToIp(string r) {
+    int i = static_cast<int>(r.find("("));
     string parsedIP, strReply;
     int a1,a2,a3,a4;
     char buffer[30];
-    response = response.substr(parenIndex+1,static_cast<int>(response.size()));
-    int responseSize = static_cast<int>(response.find(")"));
-    replace(response.begin(), response.end(), ',', '.');
-    parsedIP = response.substr(0,responseSize);
+    r = r.substr(i+1,static_cast<int>(r.size()));
+    int responseSize = static_cast<int>(r.find(")"));
+    replace(r.begin(), r.end(), ',', '.');
+    parsedIP = r.substr(0,rSize);
     sscanf(parsedIP.c_str(), "%d.%d.%d.%d", &a1, &a2, &a3, &a4 );
     sprintf(buffer, "%d.%d.%d.%d",a1,a2,a3,a4);
     return buffer;
@@ -165,15 +165,15 @@ int main(int argc , char *argv[])
 
     while (true) {
 	cout << "Enter a command: pasv, list,retr <filename>,quit" << endl;
-        cin >> myinput;
-	if (myinput == "pasv"){
+        cin >> in;
+	if (in == "pasv"){
 		PASV(sockpi);
 	}        
-	else if (myinput == "list") {
+	else if (in == "list") {
             LIST(sockpi);
-        } else if (myinput == "retr") {
+        } else if (in == "retr") {
             RETR(sockpi);
-        } else if(myinput == "quit") {
+        } else if(in == "quit") {
             QUIT(sockpi);
             return 0;
         } else {
