@@ -73,7 +73,7 @@ string requestReply(int s, string message)
 	return "";
 }
 
-int responseToPort(string r) {
+int portResponse(string r) {
 	int i = static_cast<int>(r.find("("));
 	string parsedIP, strReply;
 	uint16_t a, b, c, d, e, f, first,second;
@@ -87,7 +87,7 @@ int responseToPort(string r) {
 }
 
 
-string responseToIp(string r) {
+string ipResponse(string r) {
     int i = static_cast<int>(r.find("("));
     string parsedIP, strReply;
     int a1,a2,a3,a4;
@@ -104,7 +104,7 @@ string responseToIp(string r) {
 int PASV(int sockpi) {
     string strReply = requestReply(sockpi, "PASV\r\n");
 	cout << strReply << endl;
-	return createConnection(responseToIp(strReply),responseToPort(strReply));
+	return createConnection(ipResponse(strReply),portResponse(strReply));
 }
 
 void LIST(int sockpi) {
