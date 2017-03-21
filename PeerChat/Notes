@@ -1,0 +1,3 @@
+Project done for CECS 327 that uses GET and POST
+
+Run through command prompt in Windows using command line: java -jar <localhost> <port>
