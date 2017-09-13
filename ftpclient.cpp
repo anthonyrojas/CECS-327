@@ -1,9 +1,9 @@
-/****************************************
+/*
 Anthony Rojas
 ID# 0118191338
 CECS 327
 Fall 2017
-****************************************/
+*/
 #include <iostream>    //cout
 #include <string>
 #include <stdio.h> //printf
@@ -23,6 +23,9 @@ Fall 2017
 
 using namespace std;
 
+/**
+*Creates a connection to the host IP address using the defined port
+*/
 int create_connection(string host, int port)
 {
     int s;
@@ -54,11 +57,17 @@ int create_connection(string host, int port)
     return s;
 }
 
+/**
+*Sends a request to the host over a socket. The request is an FTP command.
+*/
 int request(int sock, string message)
 {
     return send(sock, message.c_str(), message.size(), 0);
 }
 
+/**
+*Retreives reply from server with a detailed status and description of the action.
+*/
 string reply(int s)
 {
     string strReply;
@@ -74,6 +83,9 @@ string reply(int s)
     return strReply;
 }
 
+/**
+*Requests a reply from the server over a socket when sending an FTP command as the message.
+*/
 string request_reply(int s, string message)
 {
 	if (request(s, message) > 0)
@@ -83,6 +95,10 @@ string request_reply(int s, string message)
 	return "";
 }
 
+/**
+*Enters passive mode. The parameters passed in are a host IP and a socket. 
+*It will return a socket that can be used for executing FTP commands
+*/
 int PASV(string host, int sockpi){
 	string strReply = request_reply(sockpi, "PASV \r\n");
 	int port, sock;
@@ -98,6 +114,11 @@ int PASV(string host, int sockpi){
 	return sock;
 }
 
+/**
+*Executes an FTP command. The parameters are a host ip, an FTP command, 
+*addtional specifciations added to the FTP command (such as the directory or filename), 
+*and the socket number used to enter passive mode.
+*/
 void execute_command(string host, string command, string addInfo, int sockpi){
 	string full_command = command + " " + addInfo + "\r\n";
     int sock = PASV(host, sockpi);
@@ -121,10 +142,18 @@ void execute_command(string host, string command, string addInfo, int sockpi){
 	cout << reply(sockpi) << endl;
 }
 
+/**
+*Exits the FTP client program and outputs a message to notify the user.
+*/
 void QUIT(int sockpi){
 	cout << request_reply(sockpi, "QUIT \r\n") << endl;
 }
 
+/**
+*Main method
+*Presents a menu for the user to enter FTP commands. 
+*The host ip, portm and socket are defined here.
+*/
 int main(int argc , char *argv[])
 {
     int sockpi;
