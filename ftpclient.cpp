@@ -1,13 +1,11 @@
-/*********************************************
-*Anthony Rojas
-*ID# 011819338
-*Assignment 1
-*CECS 327 Sec 05
-**********************************************/
+/****************************************
+Anthony Rojas
+ID# 0118191338
+CECS 327
+Fall 2017
+****************************************/
 #include <iostream>    //cout
-#include <fstream>
 #include <string>
-#include <algorithm>
 #include <stdio.h> //printf
 #include <stdlib.h>
 #include <string.h>    //strlen
@@ -17,33 +15,43 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <algorithm>
+#include <fstream>
+
+#define BUFFER_LENGTH 2048
+#define WAITING_TIME 100000
 
 using namespace std;
 
-#define BUFFER_LENGTH 2048
-
-int createConnection(string host, int port) {
-	int sock;
-	struct sockaddr_in sockaddr;
-	memset(&sockaddr,0, sizeof(sockaddr));
-	sock = socket(AF_INET,SOCK_STREAM,0);
-	sockaddr.sin_family=AF_INET;
-	sockaddr.sin_port= htons(port);
-	int a1,a2,a3,a4;
-	if (sscanf(host.c_str(), "%d.%d.%d.%d", &a1, &a2, &a3, &a4 ) == 4) {
-        	sockaddr.sin_addr.s_addr =  inet_addr(host.c_str());
-    	} else {
-        	cout << "by name";
-        	hostent * record = gethostbyname(host.c_str());
-        	in_addr * addressptr = (in_addr *) record->h_addr;
-        	sockaddr.sin_addr = *addressptr;
-    	}
-	if(connect(sock,(struct sockaddr *)&sockaddr,sizeof(struct sockaddr))==-1) {
-        	perror("connection fail");
-        	exit(1);
-        	return -1;
-	}
-	return sock;
+int create_connection(string host, int port)
+{
+    int s;
+    struct sockaddr_in saddr;
+    
+    memset(&saddr,0, sizeof(saddr));
+    s = socket(AF_INET,SOCK_STREAM,0);
+    saddr.sin_family=AF_INET;
+    saddr.sin_port= htons(port);
+    
+    int a1,a2,a3,a4;
+    if (sscanf(host.c_str(), "%d.%d.%d.%d", &a1, &a2, &a3, &a4 ) == 4)
+    {
+        cout << "by ip";
+        saddr.sin_addr.s_addr =  inet_addr(host.c_str());
+    }
+    else {
+        cout << "by name";
+        hostent *record = gethostbyname(host.c_str());
+        in_addr *addressptr = (in_addr *)record->h_addr;
+        saddr.sin_addr = *addressptr;
+    }
+    if(connect(s,(struct sockaddr *)&saddr,sizeof(struct sockaddr))==-1)
+    {
+        perror("connection fail");
+        exit(1);
+        return -1;
+    }
+    return s;
 }
 
 int request(int sock, string message)
@@ -56,7 +64,8 @@ string reply(int s)
     string strReply;
     int count;
     char buffer[BUFFER_LENGTH+1];
-    usleep(10000);
+    
+    usleep(WAITING_TIME);
     do {
         count = recv(s, buffer, BUFFER_LENGTH, 0);
         buffer[count] = '\0';
@@ -65,119 +74,113 @@ string reply(int s)
     return strReply;
 }
 
-string requestReply(int s, string message)
+string request_reply(int s, string message)
 {
-	if(request(s, message) > 0){
-		return reply(s);
+	if (request(s, message) > 0)
+    {
+    	return reply(s);
 	}
 	return "";
 }
 
-int portResponse(string r) {
-	int i = static_cast<int>(r.find("("));
-	string parsedIP, strReply;
-	uint16_t a, b, c, d, e, f, first,second;
-	r = r.substr(i+1,static_cast<int>(r.size()));
-	int rSize = static_cast<int>(r.find(")"));
-	replace(r.begin(), r.end(), ',', '.');
-	parsedIP = r.substr(0,rSize);
-    	sscanf(parsedIP.c_str(), "%hu.%hu.%hu.%hu.%hu.%hu.", &a, &b, &c, &d, &e, &f);
-    	first = e << 8;
-    	return first | f;
+int PASV(string host, int sockpi){
+	string strReply = request_reply(sockpi, "PASV \r\n");
+	int port, sock;
+	if(strReply.find("227") != string::npos){
+		cout << "Passive Mode entered" << endl;
+		string ip = strReply.substr(strReply.find('(') + 1, (strReply.find(')') - strReply.find(')') - 1));
+		int a1, a2, a3, a4, a5, a6;
+		sscanf(ip.c_str(), "%d,%d,%d,%d,%d,%d", &a1, &a2, &a3, &a4, &a5, &a6);
+		port = ((a5<< 8) | a6);
+        cout << port << endl;
+        sock = create_connection(host, port);
+	}
+	return sock;
 }
 
-
-string ipResponse(string r) {
-    int i = static_cast<int>(r.find("("));
-    string parsedIP, strReply;
-    int a1,a2,a3,a4;
-    char buffer[30];
-    r = r.substr(i+1,static_cast<int>(r.size()));
-    int responseSize = static_cast<int>(r.find(")"));
-    replace(r.begin(), r.end(), ',', '.');
-    parsedIP = r.substr(0,rSize);
-    sscanf(parsedIP.c_str(), "%d.%d.%d.%d", &a1, &a2, &a3, &a4 );
-    sprintf(buffer, "%d.%d.%d.%d",a1,a2,a3,a4);
-    return buffer;
-}
-
-int PASV(int sockpi) {
-    string strReply = requestReply(sockpi, "PASV\r\n");
-	cout << strReply << endl;
-	return createConnection(ipResponse(strReply),portResponse(strReply));
-}
-
-void LIST(int sockpi) {
-  int sockdtp = PASV(sockpi);
-  request(sockpi, "LIST /\r\n");
-  cout << reply(sockpi) << endl;
-  cout << endl << reply(sockdtp) << endl;
-  request(sockdtp,"CLOSE \r\n");
-  cout << reply(sockpi) << endl;
-}
-
-void RETR(int sockpi) {
-  string filename;
-  cin >> filename;
-  int sockdtp = PASV(sockpi);
-  request(sockpi, "RETR " + filename + "\r\n");
-  string strReply =  reply(sockpi);
-  std::size_t filefound = strReply.find("550");
-  if(filefound!=string::npos){
-    cout << "Error: " << strReply << endl;
-    return;
-  }
-  cout <<strReply << endl;
-
-  ofstream myfile(filename.c_str());
-  myfile << reply(sockdtp);
-  cout <<filename << " downloaded" << endl << endl;
-  request(sockdtp,"CLOSE \r\n");
-  cout <<reply(sockpi) << endl;
-}
-
-void QUIT(int sockpi) {
-    cout << requestReply(sockpi, "QUIT\r\n");
-}
-int main(int argc , char *argv[])
-{
-    int sockpi,sockdtp;
+void execute_command(string host, string command, string addInfo, int sockpi){
+	string full_command = command + " " + addInfo + "\r\n";
+    int sock = PASV(host, sockpi);
     string strReply;
-    string myinput;
-    //TODO  arg[1] can be a dns or an IP address using gethostbyname.
-    if (argc > 2){
-        sockpi = createConnection(argv[1], atoi(argv[2]));
-    }
-    if (argc == 2){
-        sockpi = createConnection(argv[1], 21);
-    } else {
-        sockpi = createConnection("130.179.16.134", 21);
-    }
-    strReply = reply(sockpi);
-    cout << strReply  << endl;
-
-    strReply = requestReply(sockpi, "USER anonymous\r\n");
-    cout << strReply  << endl;
-
-    strReply = requestReply(sockpi, "PASS anthony.rojas@student.csulb.edu\r\n");
+    strReply = request_reply(sockpi, full_command);
     cout << strReply << endl;
-    cout << reply(sockpi) << endl;//230
-
-    while (true) {
-	cout << "Enter a command: pasv, list,retr <filename>,quit" << endl;
-        cin >> in;
-	if (in == "pasv"){
-		PASV(sockpi);
-	}        
-	else if (in == "list") {
-            LIST(sockpi);
-        } else if (in == "retr") {
-            RETR(sockpi);
-        } else if(in == "quit") {
-            QUIT(sockpi);
-            return 0;
-        } else {
-            cout <<"Enter a command: pasv,list,retr <filename>,quit"<< endl;
+	if(command.find("RETR") != string::npos){
+        if(strReply.find("550") != string::npos){
+            request(sock, "CLOSE \r\n");
+            return;
+        }
+        else{
+            ofstream file_download(addInfo.c_str());
+            file_download << reply(sock);
         }
     }
+    cout << reply(sock) << endl;
+    
+    request(sock, "CLOSE \r\n");
+
+	cout << reply(sockpi) << endl;
+}
+
+void QUIT(int sockpi){
+	cout << request_reply(sockpi, "QUIT \r\n") << endl;
+}
+
+int main(int argc , char *argv[])
+{
+    int sockpi;
+    string strReply;
+    string host = "130.179.16.134";
+    //TODO  arg[1] can be a dns or an IP address.
+    if (argc > 2)
+        sockpi = create_connection(argv[1], atoi(argv[2]));
+    if (argc == 2)
+        sockpi = create_connection(argv[1], 21);
+    else
+        sockpi = create_connection("130.179.16.134", 21);
+    strReply = reply(sockpi);
+    cout << strReply  << endl;
+    
+    
+    strReply = request_reply(sockpi, "USER anonymous\r\n");
+    //TODO parse srtReply to obtain the status. 
+	// Let the system act according to the status and display
+    // friendly message to the user 
+	// You can see the ouput using std::cout << strReply  << std::endl;
+    cout << strReply << endl;
+
+    /*if(strReply.find("331") != string::npos){
+    	cout << "331 Username accepted" << endl;
+    }*/
+    
+    strReply = request_reply(sockpi, "PASS email@gmail.com\r\n");
+    cout << strReply << endl;
+    //cout << reply(sockpi) << endl; //230
+    //TODO implement PASV, LIST, RETR. 
+    // Hint: implement a function that set the SP in passive mode and accept commands.
+    string input;
+    
+    cout << "Enter a command: LIST, RETR, QUIT" << endl;
+    cin >> input;
+    while(input != "QUIT"){
+    	if(input == "LIST"){
+            string dir;
+            cout << "Enter a directory: " << endl;
+            cin >> dir;
+            execute_command(host, "LIST", dir, sockpi);
+    	}
+    	else if(input == "RETR"){
+            string filename;
+            cout << "Enter a filename: ";
+            cin >> filename;
+            execute_command(host, "RETR", filename, sockpi);
+    	}
+    	else if(input == "QUIT"){
+    		QUIT(sockpi);
+    		return 0;
+    	}
+    	cout << "Enter a command: LIST, RETR, QUIT" << endl;
+    	cin >> input;
+    }
+    QUIT(sockpi);
+    return 0;
 }
