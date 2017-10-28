@@ -1,3 +1,0 @@
-This is the folder to for assignment 3 of CECS 327
-
-To run the program, enter on the commant prompt: javac
