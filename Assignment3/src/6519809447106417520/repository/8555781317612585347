@@ -1,1 +1,7 @@
-{"metadata":{"files":[{"name":"File1","numberOfPages":"3","pageSize":"1024","size":"0"},{"name":"File2","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]},{"name":"File3","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]},{"name":"File4","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]}]}}
+{"metadata":{"files":[{"name":"File1","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]},{"name":"File2","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]},{"name":"File3","numberOfPages":"0","pageSize":"1024","size":"0","pages":[
+	{
+		"pageNumber" : "1",
+		"guid" : "1561851",
+		"size" : "1024"
+	}	
+	]},{"name":"File4","numberOfPages":"0","pageSize":"1024","size":"0","pages":[]}]}}
