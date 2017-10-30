@@ -256,13 +256,14 @@ public class DFS {
 		JsonObject jrObject = jr.readObject();
 		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
 		JsonArray jrFileArray = jrMetaData.getJsonArray("files");
+		String pageNumStr = Integer.toString(pageNumber);
 		for(int i = 0; i < jrFileArray.size(); i++){
 			JsonObject current = jrFileArray.getJsonObject(i);
 			if(current.getString("name").equals(fileName)){
 				JsonArray pagesArray = current.getJsonArray("pages");
 				for(int j=0; j < pagesArray.size(); j++){
 					JsonObject currentPage = pagesArray.getJsonObject(j);
-					if(currentPage.getString("number").equals(Integer.toString(pageNumber))){
+					if(currentPage.getString("pageNumber").equals(pageNumStr)){
 						return currentPage.toString().getBytes();
 					}
 				}
