@@ -50,7 +50,7 @@ import java.security.*;
  
  */
 
-public class DFS implements Serializable {
+public class DFS {
 	int port;
 	Chord chord;
 
@@ -152,7 +152,7 @@ public class DFS implements Serializable {
 			newMetaDataBuilder.add("metadata", newFiles);
 			JsonObject newMetaData = newMetaDataBuilder.build();
 			String metaStr = newMetaData.toString();
-			InputStream iStream = new ByteArrayInputStream(metaStr.getBytes(StandardCharsets.UTF_8));
+			InputStream iStream = new BAInputStream(metaStr.getBytes(StandardCharsets.UTF_8));
 			writeMetaData(iStream);
 		}
 	}
@@ -204,8 +204,9 @@ public class DFS implements Serializable {
 		metadataBuilder.add("metadata", filesObject);
 		JsonObject newMDObject = metadataBuilder.build();
 		String metaStr = newMDObject.toString();
-		InputStream iStream = new ByteArrayInputStream(metaStr.getBytes());
-		InputStream stream = new DataInputStream(iStream);
+		//InputStream iStream = new ByteArrayInputStream(metaStr.getBytes());
+		//InputStream stream = new DataInputStream(iStream);
+		InputStream stream = new BAInputStream(metaStr.getBytes());
 		writeMetaData(stream);
 	}
 
@@ -241,7 +242,7 @@ public class DFS implements Serializable {
 			mdObjectBuilder.add("metadata", filesObject);
 			JsonObject metadataObject = mdObjectBuilder.build();
 			String metaStr = metadataObject.toString();
-			InputStream iStream = new ByteArrayInputStream(metaStr.getBytes());
+			InputStream iStream = new BAInputStream(metaStr.getBytes());
 			writeMetaData(iStream);
 		}
 		else{
@@ -295,7 +296,7 @@ public class DFS implements Serializable {
 		JsonArray jrFilesArray = jrMetaData.getJsonArray("files");
 		for(int i = 0; i < jrFilesArray.size(); i++){
 			JsonObject currentFile = jrFilesArray.getJsonObject(i);
-			if(currentFile.getString("name").equals("fileName")){
+			if(currentFile.getString("name").equals(fileName)){
 				JsonArray currentPages = currentFile.getJsonArray("pages");
 				JsonObject firstPage = currentPages.getJsonObject(0);
 				return firstPage.toString().getBytes();
@@ -304,13 +305,35 @@ public class DFS implements Serializable {
 		return null;
 	}
 
-	public void append(String filename, Byte[] data) throws Exception {
+	public void append(String fileName, byte[] data) throws Exception {
 		// TODO: append data to fileName. If it is needed, add a new page.
 		// Let guid be the last page in Metadata.filename
 		// ChordMessageInterface peer = chord.locateSuccessor(guid);
 		// peer.put(guid, data);
 		// Write Metadata
-
+		String pageStr = new String(data);
+		JsonParser parser = Json.createParser(new StringReader(pageStr));
+		JsonObject pageObject = parser.getObject();
+		
+		JsonReader jr = readMetaData();
+		JsonObject jrObject = jr.readObject();
+		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
+		JsonArray jrFilesArray = jrMetaData.getJsonArray("files");
+		JsonArrayBuilder filesArrayBuilder = Json.createArrayBuilder();
+		for(int i = 0; i < jrFilesArray.size(); i++){
+			JsonObject currentObject = jrFilesArray.getJsonObject(i);
+			if(currentObject.getJsonString("name").equals(fileName)){
+				JsonArray currentPageArray = currentObject.getJsonArray("pages");
+				for(int j = 0; j < currentPageArray.size(); j++){
+					JsonObject currentPage = currentPageArray.getJsonObject(j);
+					if(currentPage.getString("number").equals(pageObject.getString("number"))){
+						
+					}else{
+						
+					}
+				}
+			}
+		}
 	}
 
 }

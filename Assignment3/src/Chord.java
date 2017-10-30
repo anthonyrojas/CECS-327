@@ -5,7 +5,10 @@ import java.net.*;
 import java.util.*;
 import java.io.*;
 
-public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordMessageInterface, Serializable {
+public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordMessageInterface, Serializable{
+	/**
+	 * 
+	 */
 	public static final int M = 2;
 	Registry registry; // rmi registry for lookup the remote objects.
 	ChordMessageInterface successor;
@@ -112,6 +115,7 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 			Registry registry = LocateRegistry.getRegistry(ip, port);
 			ChordMessageInterface chord = (ChordMessageInterface) (registry.lookup("Chord"));
 			predecessor = null;
+			//predecessor = chord.getPredecessor();
 			successor = chord.locateSuccessor(this.getId());
 			System.out.println("Joining ring");
 		} catch (RemoteException | NotBoundException e) {
