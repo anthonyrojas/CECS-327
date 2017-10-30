@@ -6,7 +6,7 @@ javac Client.java Chord.java ChordMessageInterface.java FileStream.java BAInputS
 
 # To run the program:
 
-java -cp ;javax.json-1.1.jar Client <port number>
+java -cp ;javax.json-1.1.jar Client [port number]
 
 # Important:
 
