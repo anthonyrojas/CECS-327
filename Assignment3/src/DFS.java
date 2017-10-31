@@ -185,7 +185,7 @@ public class DFS {
 					currBuilder.add("numberOfPages", curr.getString("numberOfPages"));
 					currBuilder.add("pageSize", curr.getString("pageSize"));
 					currBuilder.add("size", curr.getString("size"));
-					currBuilder.add("pages", Json.createArrayBuilder().add(curr.getJsonArray("pages")));
+					currBuilder.add("pages", curr.getJsonArray("pages"));
 					JsonObject updatedObject = currBuilder.build();
 					newFilesArrayBuilder.add(updatedObject);
 				} else {
