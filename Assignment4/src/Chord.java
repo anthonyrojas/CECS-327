@@ -401,29 +401,28 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	}
 	
 	public void emitMap(long key, String value, Counter counter) throws RemoteException{
-		if(predecessor.getId() == key || this.guid == key){
+		if(isKeyInSemiCloseInterval(key, predecessor.getId(), guid)){
 			if(mapStruct.get(key) != null){
 				mapStruct.get(key).add(value);
 			}else{
 				List<String> valList = new ArrayList<String>();
 				valList.add(value);
-				mapStruct.put(key, valList);
+				mpaStruct.put(key, valList);
 			}
 			counter.decrement();
 		}
-		else if(this.guid == key || successor.getId() == key){
-			successor.emitMap(key, value, counter);
-		}
-		else{
-			closestPrecedingNode(key).emitMap(key,value, counter);
+		else if(isKeyInSemiCloseInterval(key, guid, successor.getId())){
+			successor.emitMap(key, value counter);
+		}else{
+			closestPrecedingNode(key).emitMap(key, value, counter);
 		}
 	}
 	
 	public void emitReduce(long key, String value, Counter counter) throws RemoteException{
-		if(key <= predecessor.getId()){
-			reduceStruct.put(key, value);
+		if(isKeyInSemiCloseInterval(key, predecessor.getId(), guid)){
+			reduceStruct.add(key, value);
 			counter.decrement();
-		}else if(key >= this.guid){
+		}else if(isKeyInSemiCloseInterval(key, guid, successor.getId())){
 			successor.emitReduce(key, value, counter);
 		}else{
 			closestPrecedingNode(key).emitReduce(key, value, counter);
@@ -433,14 +432,21 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	public void mapContext(long page, MapInterface mapper, Counter counter) throws RemoteException{
 		
 		mapper.map(key, value);
+		Thread t = new Thread();
 		counter.increment(key, n);
 	}
 	
 	public void reduceContext(long source, ReduceInterface reducer, Counter counter) throws RemoteException{
-		
+		if(source != guid){
+			counter.add(guid);
+			successor.reduceContext(source, reducer, counter);
+		}
 	}
 	
 	public void completed(long source, Counter counter) throws RemoteException {
-		
+		if(source != guid){
+			successor.completed(source, counter);
+			counter.increment(source, 0);
+		}
 	}
 }
