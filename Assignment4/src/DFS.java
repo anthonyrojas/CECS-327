@@ -482,22 +482,6 @@ public class DFS {
 		}
 	}
 	
-	public void emitReduce(long key, String value, Counter counter){
-		
-	}
-	
-	public void mapContext(long page, MapInterface mapper, Counter counter){
-		
-	}
-	
-	public void reduceContext(long source, ReduceInterface reducer, Counter counter){
-		
-	}
-	
-	public void completed(long source, Counter counter){
-		
-	}
-	
 	public void runMapReduce(byte[] fileBytes) throws Exception
 	{
 		Counter mapCounter = new Counter();

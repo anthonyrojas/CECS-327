@@ -12,9 +12,10 @@ public class Mapper implements MapInterface, ReduceInterface
 	{
 		//fore each word in value
 		//emit(md5(word), word + ":" + 1);
+		
 	}
 	
-	public void emit(){
+	public void emit(long key, String value){
 		
 	}
 

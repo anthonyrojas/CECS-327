@@ -27,4 +27,8 @@ public class Counter implements CounterInterface {
 	public void decrement() throws RemoteException {
 		counter--;
 	}
+
+	public Counter{
+		set = new Set<long>();
+	}
 }

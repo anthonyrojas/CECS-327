@@ -430,7 +430,6 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	}
 	
 	public void mapContext(long page, MapInterface mapper, Counter counter) throws RemoteException{
-		
 		mapper.map(key, value);
 		Thread t = new Thread();
 		counter.increment(key, n);
@@ -439,6 +438,15 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	public void reduceContext(long source, ReduceInterface reducer, Counter counter) throws RemoteException{
 		if(source != guid){
 			counter.add(guid);
+			Thread t = new Thread(new Runnable(){
+				List<String> keyList = new ArrayList<String>(reduceStruct.keySet());
+				List<long> valueList = new ArrayList<long>(reduceStruct.values());
+				for(int i=0; i < reduceStruct.size(); i++){
+					//iterate through the tree map and execute reducer.reduce
+					reducer.reduce(keyList.get(i), valueList.get(i));
+				}
+			});
+			t.start();
 			successor.reduceContext(source, reducer, counter);
 		}
 	}
@@ -446,7 +454,7 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	public void completed(long source, Counter counter) throws RemoteException {
 		if(source != guid){
 			successor.completed(source, counter);
-			counter.increment(source, 0);
+			counter.increment(guid, 0);
 		}
 	}
 }
