@@ -430,9 +430,14 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	}
 	
 	public void mapContext(long page, MapInterface mapper, Counter counter) throws RemoteException{
-		mapper.map(key, value);
-		Thread t = new Thread();
-		counter.increment(key, n);
+		File metafile = new File("./" + guid + "/repository/8555781317612585347");
+		Thread t = new Thread(new Runnable(){
+			//do actions for mapContext here
+			//mapper will be done inside a loop
+			mapper.map(key, value);
+			//counter increment is done after the loop completes
+			counter.increment(key, n);
+		});
 	}
 	
 	public void reduceContext(long source, ReduceInterface reducer, Counter counter) throws RemoteException{

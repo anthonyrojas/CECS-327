@@ -499,9 +499,17 @@ public class DFS {
 			for(JsonValue p: currentPages){
 				JsonObject currentPage = p.asJsonObject();
 				String guidStr = currentPage.getString("guid");
-				
+				long page = Long.parseLong(guidStr);
+				mapCounter.add(page);
+				peer.mapContext(page, mapper, mapCounter);
 			}
 		}
-		
+		while(mapCounter.hasCompleted() != true){
+			//waiting
+		}
+		chord.completed(chord.getId(), completedCounter);
+		while(completedCounter.hasCompleted() != true){
+			//waiting for completion
+		}
 	}
 }
