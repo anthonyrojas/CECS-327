@@ -1,13 +1,45 @@
 import java.rmi.*;
 import java.rmi.registry.*;
 import java.rmi.server.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.net.*;
 import java.util.*;
 import java.io.*;
+import java.math.BigInteger;
 
-public class Mapper implements MapInterface, ReduceInterface
+/**
+ * This class is a mapper and reducer for the map reduce algorithm
+ * */
+public class Mapper implements MapInterface, ReduceInterface, Serializable
 {
+	/**
+	 * The chord associated with this mapper
+	 * */
+	ChordMessageInterface chord;
 
+	/**
+	 * The counter associated with this mapper
+	 * */
+	CounterInterface counter;
+
+	/**
+	 * Constructor that initializes a new Mapper object
+	 * @param c The chord used with this mapper
+	 * @param cont The counter with mapper
+	 * */
+	public Mapper(ChordMessageInterface c, CounterInterface cont){
+		this.chord = c;
+		this.counter = cont;
+	}
+
+	/**
+	 * Hashes the objectName to create a unique guid
+	 *
+	 * @param objectName
+	 *            name of the object or chord or peer
+	 * @return guid of the object using md5 hashing
+	 */
 	private long md5(String objectName) {
 		try {
 			MessageDigest m = MessageDigest.getInstance("MD5");
@@ -21,23 +53,27 @@ public class Mapper implements MapInterface, ReduceInterface
 		return 0;
 	}
 
+	/**
+	 * Maps each word to a guid and inserts them into a map structure
+	 * @param key The guid of the page from which the words are coming from.
+	 * @param value The words from the original page file
+	 * */
 	public void map(long key, String value) throws IOException
 	{
-		//fore each word in value
-		//emit(md5(word), word + ":" + 1);
 		String[] words = value.split("\\s+");
-		for(int i=0; i < words.length; i++){
-			emit(md5(words[i]), words[i] + ":" + 1);
+		for(String word : words){
+			long wordGuid = md5(word);
+			chord.emitMap(wordGuid, word + ":" + 1, counter);
 		}
 	}
-	
-	public void emit(long key, String value){
-		
-	}
 
+	/**
+	 * Reduces the map structure by counting the words
+	 * @param key The md5 value of the word
+	 * @param values An array of the same words
+	 * */
 	public void reduce(long key, String values[]) throws IOException {
 		String word = values[0].split(":")[0];
-		emit(key, word + ":" + values.length);
-		//emit(key, word + ":" + values.length);
+		chord.emitReduce(key, word + ":" + values.length, counter);
 	}
 }

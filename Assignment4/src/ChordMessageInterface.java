@@ -68,7 +68,7 @@ public interface ChordMessageInterface extends Remote {
 	 * 
 	 * @param guidObject
 	 *            The metadata file name of the current chord registry
-	 * @param stream
+	 * @param inputStream
 	 *            The data being entered into the metadata
 	 */
 	public void put(long guidObject, InputStream inputStream) throws IOException, RemoteException;
@@ -89,14 +89,51 @@ public interface ChordMessageInterface extends Remote {
 	 *            The file name of the metadata
 	 */
 	public void delete(long guidObject) throws IOException, RemoteException;
-	
-	public void emitMap(long key, String value, Counter counter)throws RemoteException;
-	
-	public void emitReduce(long key, String value, Counter counter) throws RemoteException;
-	
-	public void mapContext(long page, MapInterface mapper, Counter counter) throws RemoteException;
-	
-	public void reduceContext(long source, ReduceInterface reducer, Counter counter) throws RemoteException;
-	
-	public void completed(long source, Counter counter) throws RemoteException;
+
+	/**
+	 * Obtains the bytes from a specified file in the registry
+	 * @param guidObject The name of the file to be converted to bytes
+	 * @return The bytes of a file
+	 * */
+	public byte[] getBytes(long guidObject) throws RemoteException, IOException;
+
+	/**
+	 * Emits the key and value to the map srtucture.
+	 * @param key The guid of the word
+	 * @param counter The counter interface to be used with the mapping phase
+	 * @param value The word being counted
+	 * */
+	public void emitMap(long key, String value, CounterInterface counter)throws RemoteException;
+
+	/**
+	 * Emits the key and value to the reduce structure
+	 * @param key The md5 value of the word
+	 * @param value The word being added to the reduce structure
+	 * @param counter The counter associated with the reduce phase
+	 * */
+	public void emitReduce(long key, String value, CounterInterface counter) throws RemoteException;
+
+	/**
+	 * Maps the context of the raw page file to the map structure
+	 * @param page The guid of the page
+	 * @param mapper The mapper interface being used to fill the map structure
+	 * @param counter The counter associated with the map phase
+	 * */
+	public void mapContext(long page, MapInterface mapper, CounterInterface counter) throws RemoteException, IOException;
+
+	/**
+	 * Reduces the context of the map structure by counting the words into the reduce structure
+	 * @param source The guid of the of the chord
+	 * @param reducer The reducer for filling in the reduce structure
+	 * @param counter The counter associated with the reduce phase
+	 * */
+	public void reduceContext(long source, ReduceInterface reducer, CounterInterface counter) throws RemoteException, IOException;
+
+	/**
+	 * Outputs the reduce data to a file after the reduce phase is complete
+	 * @param source The guid of the chord
+	 * @param counter The counter associated with the complete phase
+	 * @param mdFileName The name of the file being map reduced from
+	 * */
+	public void completed(long source, CounterInterface counter, String mdFileName) throws RemoteException;
 }

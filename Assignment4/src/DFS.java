@@ -56,6 +56,10 @@ import java.security.*;
  */
 public class DFS {
 	/**
+	 * The size for each page in this DFS
+	 * */
+	public final int PAGE_SIZE = 1024;
+	/**
 	 * The port on which the DFS will run
 	 */
 	int port;
@@ -63,8 +67,6 @@ public class DFS {
 	 * Chord object that will contain the files.
 	 */
 	Chord chord;
-	private TreeMap<Long, List<String>> mapStruct;
-	private TreeMap<Long, String> reduceStruct;
 
 	/**
 	 * Hashes the objectName to create a unique guid
@@ -106,8 +108,6 @@ public class DFS {
 		} catch (Exception e) {
 			createMetaData();
 		}
-		mapStruct = new TreeMap<Long, List<String>>();
-		reduceStruct = new TreeMap<Long, String>();
 	}
 
 	/**
@@ -248,11 +248,26 @@ public class DFS {
 		JsonObject meta = jrObject.getJsonObject("metadata");
 		JsonArray files = meta.getJsonArray("files");
 		JsonObjectBuilder newFile = Json.createObjectBuilder();
+		JsonArrayBuilder newFilePages = Json.createArrayBuilder();
+		//the first page in the new file
+		long firstPageMD5 = md5(fileName + ":1");
+		String newFileName = String.valueOf(firstPageMD5);
+		JsonObjectBuilder newPage = Json.createObjectBuilder();
+		//{pageNumber, guid, size};
+		newPage.add("pageNumber", "1");
+		newPage.add("guid", String.valueOf(firstPageMD5));
+		newPage.add("size", "0");
+		JsonObject firstPage = newPage.build();
+		//the page array for the new file
+		JsonArrayBuilder pagesArrayBuilder = Json.createArrayBuilder();
+		pagesArrayBuilder.add(firstPage);
+		JsonArray pagesArray = pagesArrayBuilder.build();
+		//the new file
 		newFile.add("name", fileName);
-		newFile.add("numberOfPages", "0");
+		newFile.add("numberOfPages", "1");
 		newFile.add("pageSize", "1024");
 		newFile.add("size", "0");
-		newFile.add("pages", Json.createArrayBuilder());
+		newFile.add("pages", pagesArray);
 		JsonObject temp = newFile.build();
 		// System.out.println(temp.toString());
 		JsonArrayBuilder filesBuilder = Json.createArrayBuilder();
@@ -267,10 +282,10 @@ public class DFS {
 		metadataBuilder.add("metadata", filesObject);
 		JsonObject newMDObject = metadataBuilder.build();
 		String metaStr = newMDObject.toString();
-		// InputStream iStream = new ByteArrayInputStream(metaStr.getBytes());
-		// InputStream stream = new DataInputStream(iStream);
 		InputStream stream = new BAInputStream(metaStr.getBytes());
 		writeMetaData(stream);
+		File addedFile = new File("./" + String.valueOf(chord.getId()) + "/repository/" + newFileName);
+		addedFile.createNewFile();
 	}
 
 	/**
@@ -297,6 +312,7 @@ public class DFS {
 			for (int i = 0; i < jrFiles.size(); i++) {
 				JsonObject curr = jrFiles.getJsonObject(i);
 				if (curr.getString("name").equals(fileName)) {
+					deleteFile(curr.getJsonArray("pages"));
 					System.out.println("file " + fileName + " has been deleted");
 				} else {
 					filesArrayBuilder.add(curr);
@@ -314,6 +330,18 @@ public class DFS {
 			writeMetaData(iStream);
 		} else {
 			System.out.println("There are no files or that file does not exist");
+		}
+	}
+
+	/**
+	 * Deletes all the pages in a file within the DFS.
+	 * @param pagesArray The array of pages to be deleted
+	 * */
+	public void deleteFile(JsonArray pagesArray) throws Exception{
+		for(int i = 0; i < pagesArray.size(); i++){
+			String guidStr = String.valueOf(pagesArray.getJsonObject(i).getString("guid"));
+			long pageGuid = Long.parseLong(guidStr);
+			chord.delete(pageGuid);
 		}
 	}
 
@@ -343,7 +371,16 @@ public class DFS {
 				for (int j = 0; j < pagesArray.size(); j++) {
 					JsonObject currentPage = pagesArray.getJsonObject(j);
 					if (currentPage.getString("pageNumber").equals(pageNumStr)) {
-						return currentPage.toString().getBytes();
+						System.out.println(currentPage.toString());
+						InputStream is = chord.get(Long.parseLong(currentPage.getString("guid")));
+						int bytesSize = Integer.parseInt(currentPage.getString("size"));
+						byte[] data = new byte[bytesSize];
+						ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+						int dataInt = is.read(data, 0, data.length);
+						bOut.write(data, 0, data.length);
+						bOut.flush();
+						is.close();
+						return data;
 					}
 				}
 			}
@@ -372,7 +409,15 @@ public class DFS {
 					return null;
 				}
 				JsonObject lastPage = currentPages.getJsonObject(currentPages.size() - 1);
-				return lastPage.toString().getBytes();
+				InputStream is = chord.get(Long.parseLong(lastPage.getString("guid")));
+				int bytesSize = Integer.parseInt(lastPage.getString("size"));
+				byte[] data = new byte[bytesSize];
+				ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+				int dataInt = is.read(data, 0, data.length);
+				bOut.write(data, 0, data.length);
+				bOut.flush();
+				is.close();
+				return data;
 			}
 		}
 		return null;
@@ -400,7 +445,16 @@ public class DFS {
 					return null;
 				}
 				JsonObject firstPage = currentPages.getJsonObject(0);
-				return firstPage.toString().getBytes();
+				System.out.println(firstPage.toString());
+				InputStream is = chord.get(Long.parseLong(firstPage.getString("guid")));
+				int bytesSize = Integer.parseInt(firstPage.getString("size"));
+				byte[] data = new byte[bytesSize];
+				ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+				int dataInt = is.read(data, 0, data.length);
+				bOut.write(data, 0, data.length);
+				bOut.flush();
+				is.close();
+				return data;
 			}
 		}
 		return null;
@@ -421,44 +475,83 @@ public class DFS {
 		// ChordMessageInterface peer = chord.locateSuccessor(guid);
 		// peer.put(guid, data);
 		// Write Metadata
+		//Write the input stream data into the last page of the file
+		//if the bytes exceed the size of the file, then create a new page
+		int dataSize = data.length;
 		BAInputStream bis = new BAInputStream(data);
-		JsonReader pageJR = Json.createReader(bis);
-		JsonObject pageObject = pageJR.readObject();
+
 		JsonReader jr = readMetaData();
 		JsonObject jrObject = jr.readObject();
 		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
 		JsonArray jrFilesArray = jrMetaData.getJsonArray("files");
+
 		JsonArrayBuilder filesArrayBuilder = Json.createArrayBuilder();
-		for (int i = 0; i < jrFilesArray.size(); i++) {
+
+		for(int i=0; i<jrFilesArray.size(); i++){
 			JsonObject currentFile = jrFilesArray.getJsonObject(i);
-			JsonArrayBuilder pagesBuilder = Json.createArrayBuilder();
-			JsonObjectBuilder fileBuilder = Json.createObjectBuilder();
-			if (currentFile.getString("name").equals(fileName)) {
-				JsonArray currentPageArray = currentFile.getJsonArray("pages");
-				if (currentPageArray.size() > 0) {
-					for (int j = 0; j < currentPageArray.size(); j++) {
-						pagesBuilder.add(currentPageArray.getJsonObject(j));
+			JsonArray currentFilePages = currentFile.getJsonArray("pages");
+			JsonObjectBuilder fileObjectBuilder = Json.createObjectBuilder();
+			int pageSizeInt = Integer.parseInt(currentFile.getString("size"));
+
+			JsonArrayBuilder pagesArrayBuilder = Json.createArrayBuilder();
+			JsonArray pagesArray;
+			JsonObjectBuilder currentPageBuilder = Json.createObjectBuilder();
+			for(int j = 0; j < currentFilePages.size(); j++){
+				JsonObject currentPageObject = null;
+				if(currentFile.getString("name").equals(fileName) && j == (currentFilePages.size()-1)){
+					JsonObject lastPage = currentFilePages.getJsonObject(j);
+					String lastPageSizeStr = lastPage.getString("size");
+					int lastPageSizeInt = Integer.parseInt(lastPageSizeStr);
+					int maxSizeDifference = PAGE_SIZE - lastPageSizeInt;
+					//is the lastPageSizeInt + dataSize bigger than PAGE_SIZE
+					if((lastPageSizeInt + dataSize) > PAGE_SIZE){
+						byte[] leftoverBytes = Arrays.copyOfRange(data,0, maxSizeDifference);
+						currentPageBuilder.add("pageNumber", currentFilePages.getJsonObject(j).getString("pageNumber"));
+						currentPageBuilder.add("guid", currentFilePages.getJsonObject(j).getString("guid"));
+						currentPageBuilder.add("size", "1024");
+						pagesArrayBuilder.add(currentPageBuilder.build());
+						byte[] remainingBytes = Arrays.copyOfRange(data, maxSizeDifference, dataSize-1);
+						JsonObjectBuilder additionalPageBuilder = Json.createObjectBuilder();
+						String currentPageNumberStr = currentFilePages.getJsonObject(j).getString("pageNumber");
+						int addPageNumberInt = Integer.parseInt(currentPageNumberStr) + 1;
+						additionalPageBuilder.add("pageNumber", String.valueOf(addPageNumberInt));
+						long addPageGuid = md5(fileName + ":" + String.valueOf(addPageNumberInt+1));
+						additionalPageBuilder.add("guid",String.valueOf(addPageGuid));
+						additionalPageBuilder.add("size", String.valueOf(dataSize-maxSizeDifference));
+						pagesArrayBuilder.add(additionalPageBuilder.build());
+						chord.put(Long.parseLong(currentFilePages.getJsonObject(j).getString("guid")), new ByteArrayInputStream(leftoverBytes));
+						chord.put(addPageGuid, new ByteArrayInputStream(remainingBytes));
+					}
+					else{
+						String currPageGuidStr = currentFilePages.getJsonObject(j).getString("guid");
+						long currPageGuidLong = Long.parseLong(currPageGuidStr);
+						currentPageBuilder.add("pageNumber", currentFilePages.getJsonObject(j).getString("pageNumber"));
+						currentPageBuilder.add("guid", currentFilePages.getJsonObject(j).getString("guid"));
+						currentPageBuilder.add("size", String.valueOf(lastPageSizeInt + dataSize));
+						pagesArrayBuilder.add(currentPageBuilder.build());
+						byte[] currPageBytes = chord.getBytes(currPageGuidLong);
+						byte[] combined = new byte[currPageBytes.length + data.length];
+						System.arraycopy(currPageBytes, 0, combined, 0, currPageBytes.length);
+						System.arraycopy(data, 0, combined, currPageBytes.length, data.length);
+						chord.put(Long.parseLong(currentFilePages.getJsonObject(j).getString("guid")), new ByteArrayInputStream(combined));
 					}
 				}
-				// pagesBuilder.add(currentPageArray);
-				pagesBuilder.add(pageObject);
-				JsonArray pagesArray = pagesBuilder.build();
-				fileBuilder.add("name", fileName);
-				int numPages = Integer.parseInt(currentFile.getString("numberOfPages")) + 1;
-				String numPagesStr = Integer.toString(numPages);
-				fileBuilder.add("numberOfPages", numPagesStr);
-				fileBuilder.add("pageSize", currentFile.getString("pageSize"));
-				int size = Integer.parseInt(currentFile.getString("size"))
-						+ Integer.parseInt(pageObject.getString("size"));
-				String sizeStr = Integer.toString(size);
-				fileBuilder.add("size", sizeStr);
-				fileBuilder.add("pages", pagesArray);
-				JsonObject fileObject = fileBuilder.build();
-				filesArrayBuilder.add(fileObject);
-				System.out.println("Page added to file " + fileName + ": " + new String(data));
-			} else {
-				filesArrayBuilder.add(currentFile);
+				else{
+					currentPageBuilder.add("pageNumber", currentFilePages.getJsonObject(j).getString("pageNumber"));
+					currentPageBuilder.add("guid", currentFilePages.getJsonObject(j).getString("guid"));
+					currentPageBuilder.add("size", currentFilePages.getJsonObject(j).getString("size"));
+					currentPageObject = currentPageBuilder.build();
+					pagesArrayBuilder.add(currentPageObject);
+				}
 			}
+			pagesArray = pagesArrayBuilder.build();
+			int numberOfPages = pagesArray.size();
+			int fileSizeInt = getPageArraySize(pagesArray);
+			fileObjectBuilder.add("name", currentFile.getString("name"));
+			fileObjectBuilder.add("numberOfPages", String.valueOf(numberOfPages));
+			fileObjectBuilder.add("size", String.valueOf(fileSizeInt));
+			fileObjectBuilder.add("pages", pagesArray);
+			filesArrayBuilder.add(fileObjectBuilder.build());
 		}
 		JsonArray filesArray = filesArrayBuilder.build();
 		JsonObjectBuilder filesBuilder = Json.createObjectBuilder();
@@ -471,45 +564,93 @@ public class DFS {
 		InputStream iStream = new BAInputStream(mdString.getBytes());
 		writeMetaData(iStream);
 	}
-	
-	public void emitMap(long key, String value, Counter counter){
-		List<String> filenameList = mapStruct.get(key);
-		if(filenameList != null){
-			mapStruct.get(key).add(value);
+
+	/**
+	 * This method obtains the size of a page Array
+	 * @param pageArray The JSON array of pages
+	 * @return size of the page array
+	 * */
+	public int getPageArraySize(JsonArray pageArray){
+		int sum = 0;
+		for(int i=0; i < pageArray.size(); i++){
+			sum += Integer.parseInt(pageArray.getJsonObject(i).getString("size"));
 		}
-		else{
-			
-		}
+		return sum;
 	}
-	
-	public void runMapReduce(byte[] fileBytes) throws Exception
-	{
-		Counter mapCounter = new Counter();
-		Counter reduceCounter = new Counter();
-		Counter completedCounter = new Counter();
-		Mapper mapper = new Mapper();
-		Mapper reducer = new Mapper();
+
+	/**
+	 * Map Reduce is executed on a specified file in the DFS
+	 * @param filename The name of the file
+	 * */
+	public void runMapReduce(String filename) throws Exception {
+		CounterInterface mapCounter = new Counter();
+		CounterInterface reduceCounter = new Counter();
+		CounterInterface completedCounter = new Counter();
+		MapInterface mapper = new Mapper(chord, mapCounter);
+		ReduceInterface reducer = new Mapper(chord, reduceCounter);
 		JsonReader jr = readMetaData();
 		JsonObject jrObject = jr.readObject();
 		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
 		JsonArray jrFiles = jrMetaData.getJsonArray("files");
-		for(JsonValue j : jrFiles){
+		//obtain the file with name filename
+		for (JsonValue j : jrFiles) {
 			JsonObject currentFile = j.asJsonObject();
-			JsonArray currentPages = currentFile.getJsonArray("pages");
-			for(JsonValue p: currentPages){
-				JsonObject currentPage = p.asJsonObject();
-				String guidStr = currentPage.getString("guid");
-				long page = Long.parseLong(guidStr);
-				mapCounter.add(page);
-				peer.mapContext(page, mapper, mapCounter);
+			if(currentFile.getString("name").equals(filename)){
+				JsonArray currentPages = currentFile.getJsonArray("pages");
+				//run map
+				for (JsonValue p : currentPages) {
+					JsonObject currentPage = p.asJsonObject();
+					String guidStr = currentPage.getString("guid");
+					long page = Long.parseLong(guidStr);
+					mapCounter.add(page);
+					chord.mapContext(page, mapper, mapCounter);
+				}
+				Timer timeoutTimer = new Timer();
+				while (mapCounter.hasCompleted() != true) {
+					timeoutTimer.schedule(new TimerTask() {
+						@Override
+						public void run() {
+
+						}
+					}, 5);
+				}
+				System.out.println("Mapping complete");
+				chord.reduceContext(chord.getId(), reducer, reduceCounter);
+				while(reduceCounter.hasCompleted() != true){
+					//waiting for reduce completion
+					timeoutTimer.schedule(new TimerTask(){
+						@Override
+						public void run(){
+
+						}
+					}, 5);
+				}
+				System.out.println("Reducing complete");
+				createMapReduceFile(filename);
+				chord.completed(chord.getId(), completedCounter, filename);
+				while (completedCounter.hasCompleted() != true) {
+					// waiting for completion
+					timeoutTimer.schedule(new TimerTask() {
+						@Override
+						public void run() {
+
+						}
+					}, 5);
+				}
+				//map reduce is now done
+				System.out.println("Map reduce completed");
 			}
 		}
-		while(mapCounter.hasCompleted() != true){
-			//waiting
-		}
-		chord.completed(chord.getId(), completedCounter);
-		while(completedCounter.hasCompleted() != true){
-			//waiting for completion
-		}
+	}
+
+	/**
+	 * Creates the directory for the map reduce output file
+	 * @param fileName The name of the file for the map reduce
+	 * */
+	public void createMapReduceFile(String fileName) throws Exception{
+		String pathStr = "mapreduce/" + chord.getId() + "/" + fileName;
+		Files.createDirectories(Paths.get(pathStr));
+		File mrFile = new File(pathStr + "/output.txt");
+		mrFile.createNewFile();
 	}
 }

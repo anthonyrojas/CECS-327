@@ -1,3 +1,5 @@
+import org.omg.CORBA.Environment;
+
 import java.rmi.*;
 import java.net.*;
 import java.util.*;
@@ -6,13 +8,12 @@ import java.math.BigInteger;
 import java.security.*;
 import java.nio.file.*;
 import javax.json.*;
-
 /**
  * This class acts as a client to interact with the DFS
  * 
  * @author Anthony Rojas
  */
-public class Client implements Serializable {
+public class Client{
 	/**
 	 * The DFS to be used with this instance of the client
 	 */
@@ -41,7 +42,7 @@ public class Client implements Serializable {
 	public void showMenu(DFS dfs) throws Exception {
 		Scanner in = new Scanner(System.in);
 		String command = "";
-		String commands = " join, ls, touch, delete, read, tail, head, append, move, quit";
+		String commands = " join, ls, touch, delete, read, tail, head, append, move, reduce, quit";
 		String fileName;
 		int pageNumber;
 		while (command != null) {
@@ -113,27 +114,17 @@ public class Client implements Serializable {
 				case "append":
 					System.out.println("Append selected");
 					JsonObjectBuilder jBuilder = Json.createObjectBuilder();
-					System.out.println("Enter the file name: ");
+					System.out.println("Enter the file name in the DFS: ");
 					fileName = in.next();
-					System.out.println("Enter a guid for the new page: ");
-					int pageGuid = in.nextInt();
-					System.out.println("Enter the size of the new page: ");
-					int size = in.nextInt();
-					byte[] appendTail = dfs.tail(fileName);
-					int pageNum = 1;
-					if (appendTail != null) {
-						BAInputStream bis = new BAInputStream(appendTail);
-						JsonReader tailReader = Json.createReader(bis);
-						JsonObject tailObject = tailReader.readObject();
-						String lastPageStr = tailObject.getString("pageNumber");
-						pageNum = Integer.parseInt(lastPageStr) + 1;
+					System.out.println("Enter the file name and path from which to append: ");
+					String appendFileName = in.next();
+					try{
+						Path appendingFilePath = Paths.get(appendFileName);
+						byte[] data = Files.readAllBytes(appendingFilePath);
+						dfs.append(fileName, data);
+					}catch(Exception fileByteErr){
+						fileByteErr.printStackTrace();
 					}
-					jBuilder.add("pageNumber", Integer.toString(pageNum));
-					jBuilder.add("guid", Integer.toString(pageGuid));
-					jBuilder.add("size", Integer.toString(size));
-					JsonObject pageObject = jBuilder.build();
-					String pageStr = pageObject.toString();
-					dfs.append(fileName, pageStr.getBytes());
 					break;
 				case "move":
 					System.out.println("Move selected");
@@ -143,6 +134,12 @@ public class Client implements Serializable {
 					String newName = in.next();
 					dfs.mv(oldName, newName);
 					break;
+				case "reduce":
+					System.out.println("Running map reduce.");
+					System.out.print("Enter a file name: ");
+					fileName = in.next();
+					dfs.runMapReduce(fileName);
+					break;
 				case "quit":
 					System.exit(0);
 					break;
@@ -150,6 +147,7 @@ public class Client implements Serializable {
 					System.out.println("Invalid input");
 				}
 			} catch (Exception e) {
+				e.printStackTrace();
 				System.out.println(e.toString());
 			}
 		}

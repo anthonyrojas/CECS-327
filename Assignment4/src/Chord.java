@@ -1,9 +1,18 @@
+import org.omg.CORBA.Environment;
+
+import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.rmi.*;
 import java.rmi.registry.*;
 import java.rmi.server.*;
 import java.net.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.io.*;
+import java.lang.*;
 
 /**
  * This class creates a chord messenger node and implements the
@@ -50,6 +59,20 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	Counter counter;
 	TreeMap<Long, List<String>> mapStruct;
 	TreeMap<Long, String> reduceStruct;
+
+	private long md5(String objectName) {
+		try {
+			MessageDigest m = MessageDigest.getInstance("MD5");
+			m.reset();
+			m.update(objectName.getBytes());
+			BigInteger bigInt = new BigInteger(1, m.digest());
+			return Math.abs(bigInt.longValue());
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+		return 0;
+	}
+
 	/**
 	 * Checks if 2 nodes are close or neighbors to each other in a semi-closed
 	 * interval
@@ -64,6 +87,7 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	 */
 	public Boolean isKeyInSemiCloseInterval(long key, long key1, long key2) {
 		if (key1 < key2)
+			//Key1 < key <= key2
 			return (key > key1 && key <= key2);
 		else
 			return (key > key1 || key <= key2);
@@ -123,6 +147,18 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 			throw (new RemoteException("File does not exists"));
 		}
 		return file;
+	}
+
+	/**
+	 * Obtains the bytes from a specified file in the registry
+	 * @param guidObject The name of the file to be converted to bytes
+	 * @return The bytes of a file
+	 * */
+	public byte[] getBytes(long guidObject)throws RemoteException, IOException{
+		File f = new File("./" + guid + "/repository/" + guidObject);
+		String filePath = "./" + guid + "/repository/" + guidObject;
+		Path p = Paths.get(filePath);
+		return Files.readAllBytes(p);
 	}
 
 	/**
@@ -396,70 +432,168 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 				}
 			}
 		} catch (RemoteException e) {
-			System.out.println("Cannot retrive id");
+			System.out.println("Cannot retrieve id");
 		}
 	}
-	
-	public void emitMap(long key, String value, Counter counter) throws RemoteException{
-		if(isKeyInSemiCloseInterval(key, predecessor.getId(), guid)){
+
+	/**
+	 * Emits the key and value to the map srtucture.
+	 * @param key The guid of the word
+	 * @param counter The counter interface to be used with the mapping phase
+	 * @param value The word being counted
+	 * */
+	public void emitMap(long key, String value, CounterInterface counter) throws RemoteException{
+		if(isKeyInSemiCloseInterval(key, predecessor.getId(), this.getId())){
 			if(mapStruct.get(key) != null){
 				mapStruct.get(key).add(value);
 			}else{
 				List<String> valList = new ArrayList<String>();
 				valList.add(value);
-				mpaStruct.put(key, valList);
+				mapStruct.put(key, valList);
 			}
 			counter.decrement();
 		}
-		else if(isKeyInSemiCloseInterval(key, guid, successor.getId())){
-			successor.emitMap(key, value counter);
-		}else{
+		else if(isKeyInSemiCloseInterval(key, this.getId(), successor.getId())){
+			successor.emitMap(key, value, counter);
+		}
+		else{
 			closestPrecedingNode(key).emitMap(key, value, counter);
 		}
 	}
-	
-	public void emitReduce(long key, String value, Counter counter) throws RemoteException{
+
+	/**
+	 * Emits the key and value to the reduce structure
+	 * @param key The md5 value of the word
+	 * @param value The word being added to the reduce structure
+	 * @param counter The counter associated with the reduce phase
+	 * */
+	public void emitReduce(long key, String value, CounterInterface counter) throws RemoteException{
 		if(isKeyInSemiCloseInterval(key, predecessor.getId(), guid)){
-			reduceStruct.add(key, value);
+			reduceStruct.put(key, value);
 			counter.decrement();
-		}else if(isKeyInSemiCloseInterval(key, guid, successor.getId())){
+		}else if(isKeyInSemiCloseInterval(key, this.getId(), successor.getId())){
 			successor.emitReduce(key, value, counter);
 		}else{
 			closestPrecedingNode(key).emitReduce(key, value, counter);
 		}
 	}
-	
-	public void mapContext(long page, MapInterface mapper, Counter counter) throws RemoteException{
-		File metafile = new File("./" + guid + "/repository/8555781317612585347");
+
+	/**
+	 * Maps the context of the raw page file to the map structure
+	 * @param page The guid of the page
+	 * @param mapper The mapper interface being used to fill the map structure
+	 * @param counter The counter associated with the map phase
+	 * */
+	public void mapContext(long page, MapInterface mapper, CounterInterface counter) throws RemoteException, IOException{
+		InputStream pageStream = locateSuccessor(page).get(page);
 		Thread t = new Thread(new Runnable(){
-			//do actions for mapContext here
-			//mapper will be done inside a loop
-			mapper.map(key, value);
-			//counter increment is done after the loop completes
-			counter.increment(key, n);
-		});
-	}
-	
-	public void reduceContext(long source, ReduceInterface reducer, Counter counter) throws RemoteException{
-		if(source != guid){
-			counter.add(guid);
-			Thread t = new Thread(new Runnable(){
-				List<String> keyList = new ArrayList<String>(reduceStruct.keySet());
-				List<long> valueList = new ArrayList<long>(reduceStruct.values());
-				for(int i=0; i < reduceStruct.size(); i++){
-					//iterate through the tree map and execute reducer.reduce
-					reducer.reduce(keyList.get(i), valueList.get(i));
+			@Override
+			public void run() {
+				int numRows = 0;
+				try{
+					FileOutputStream outputStream = new FileOutputStream("./mapData.txt");
+					while(pageStream.available() > 0){
+						outputStream.write(pageStream.read());
+					}
+					outputStream.close();
+					File tempFile = new File("./mapData.txt");
+					Scanner scanner = new Scanner(tempFile);
+					while (scanner.hasNextLine()) {
+						String firstLine = scanner.nextLine();
+						String[] lineArray = firstLine.split("\\s+");
+						numRows = lineArray.length;
+						mapper.map(page, firstLine);
+					}
+					scanner.close();
+					counter.increment(page, numRows);
+					tempFile.delete();
+				}catch(FileNotFoundException fnfe){
+					System.out.println("MapFnfe:\n" + fnfe.getMessage());
+					//handle error
+				}catch(IOException ioe){
+					System.out.println("MapIoe:\n" + ioe.getMessage());
+					//handle error
 				}
-			});
-			t.start();
+			}
+		});
+		t.start();
+	}
+
+	/**
+	 * Reduces the context of the map structure by counting the words into the reduce structure
+	 * @param source The guid of the of the chord
+	 * @param reducer The reducer for filling in the reduce structure
+	 * @param counter The counter associated with the reduce phase
+	 * */
+	public void reduceContext(long source, ReduceInterface reducer, CounterInterface counter) throws RemoteException, IOException{
+		if(source != guid) {
+			counter.add(guid);
 			successor.reduceContext(source, reducer, counter);
 		}
+		List<Long> keyList = new ArrayList<Long>(mapStruct.keySet());
+		Thread t = new Thread(new Runnable(){
+			@Override
+			public void run(){
+				int numRows = 0;
+				try{
+					for(int i=0; i < mapStruct.size(); i++){
+						//iterate through the tree map and execute reducer.reduce
+						numRows++;
+						long key = keyList.get(i);
+						List<String> valList = mapStruct.get(key);
+						String [] arrValues = new String[valList.size()];
+						for(int j=0; j < valList.size(); j++){
+							arrValues[j] = valList.get(j);
+						}
+						reducer.reduce(key, arrValues);
+					}
+					counter.increment(guid, numRows);
+				}catch(IOException e){
+					//handle error
+					System.out.println("reduceIoe:\n" + e.getMessage());
+				}
+			}
+		});
+		t.start();
 	}
-	
-	public void completed(long source, Counter counter) throws RemoteException {
+
+	/**
+	 * Outputs the reduce data to a file after the reduce phase is complete
+	 * @param source The guid of the chord
+	 * @param counter The counter associated with the complete phase
+	 * @param mdFileName The name of the file being map reduced from
+	 * */
+	public void completed(long source, CounterInterface counter, String mdFileName) throws RemoteException {
 		if(source != guid){
-			successor.completed(source, counter);
-			counter.increment(guid, 0);
+			counter.add(guid);
+			successor.completed(source, counter, mdFileName);
 		}
+		Thread t = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try{
+					if(!reduceStruct.isEmpty()){
+						String outputStr = "";
+						List<Long> keyList = new ArrayList<Long>(reduceStruct.keySet());
+						List<String> valList = new ArrayList<String>(reduceStruct.values());
+						for(int i=0; i < keyList.size(); i++){
+							outputStr += keyList.get(i) + " : " + valList.get(i) + ", ";
+						}
+						InputStream iStream = new BAInputStream(outputStr.getBytes());
+						String filePath = "mapreduce/" + guid + "/" + mdFileName + "/output.txt";
+						FileOutputStream output = new FileOutputStream(filePath);
+						while (iStream.available() > 0)
+							output.write(iStream.read());
+						output.close();
+						counter.increment(guid, 0);
+					}
+				}catch(FileNotFoundException fnfe) {
+					System.out.println("Completed fnfe: " + fnfe.getMessage());
+				}catch(Exception e){
+					System.out.println("Completed e: " + e.getMessage());
+				}
+			}
+		});
+		t.start();
 	}
 }
