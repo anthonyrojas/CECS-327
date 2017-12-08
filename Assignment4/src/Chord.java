@@ -561,18 +561,19 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 	 * Outputs the reduce data to a file after the reduce phase is complete
 	 * @param source The guid of the chord
 	 * @param counter The counter associated with the complete phase
-	 * @param mdFileName The name of the file being map reduced from
+	 * @param outputGuid The name of the file being map reduced from
 	 * */
-	public void completed(long source, CounterInterface counter, String mdFileName) throws RemoteException {
+	public void completed(long source, CounterInterface counter, long outputGuid) throws RemoteException {
 		if(source != guid){
 			counter.add(guid);
-			successor.completed(source, counter, mdFileName);
+			successor.completed(source, counter, outputGuid);
 		}
 		Thread t = new Thread(new Runnable() {
 			@Override
 			public void run() {
 				try{
 					if(!reduceStruct.isEmpty()){
+						System.out.println("running completion...");
 						String outputStr = "";
 						List<Long> keyList = new ArrayList<Long>(reduceStruct.keySet());
 						List<String> valList = new ArrayList<String>(reduceStruct.values());
@@ -580,20 +581,18 @@ public class Chord extends java.rmi.server.UnicastRemoteObject implements ChordM
 							outputStr += keyList.get(i) + " : " + valList.get(i) + ", ";
 						}
 						InputStream iStream = new BAInputStream(outputStr.getBytes());
-						String filePath = "mapreduce/" + guid + "/" + mdFileName + "/output.txt";
-						FileOutputStream output = new FileOutputStream(filePath);
-						while (iStream.available() > 0)
-							output.write(iStream.read());
-						output.close();
+						put(outputGuid, iStream);
+						iStream.close();
 						counter.increment(guid, 0);
 					}
-				}catch(FileNotFoundException fnfe) {
+				}/*catch(FileNotFoundException fnfe) {
 					System.out.println("Completed fnfe: " + fnfe.getMessage());
-				}catch(Exception e){
+				}*/catch(Exception e){
 					System.out.println("Completed e: " + e.getMessage());
 				}
 			}
 		});
+
 		t.start();
 	}
 }

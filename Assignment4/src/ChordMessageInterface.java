@@ -133,7 +133,7 @@ public interface ChordMessageInterface extends Remote {
 	 * Outputs the reduce data to a file after the reduce phase is complete
 	 * @param source The guid of the chord
 	 * @param counter The counter associated with the complete phase
-	 * @param mdFileName The name of the file being map reduced from
+	 * @param outputGuid The name of the file being map reduced from
 	 * */
-	public void completed(long source, CounterInterface counter, String mdFileName) throws RemoteException;
+	public void completed(long source, CounterInterface counter, long outputGuid) throws RemoteException;
 }

@@ -8,7 +8,7 @@ import java.io.*;
 /**
  * This class is the counter for words in a file
  * */
-public class Counter implements CounterInterface, Serializable {
+public class Counter implements CounterInterface, Serializable{
 	/**
 	 * The number of rows
 	 * */

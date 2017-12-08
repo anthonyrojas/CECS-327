@@ -289,6 +289,49 @@ public class DFS {
 	}
 
 	/**
+	 * Creates the output file in the metadata for map reduce files and pages
+	 * @param fileName The name of the output file to contain the map reduce pages in the metadata
+	 * @param mrPage The guid of the map reduce file
+	 * */
+	public void touchMapReduce(String fileName, long mrPage) throws Exception{
+		JsonReader jr = readMetaData();
+		JsonObject jrObject = jr.readObject();
+		JsonObject meta = jrObject.getJsonObject("metadata");
+		JsonArray files = meta.getJsonArray("files");
+		JsonObjectBuilder newFile = Json.createObjectBuilder();
+		JsonArrayBuilder newFilePages = Json.createArrayBuilder();
+		//the first page in the new file
+		//the page array for the new file
+		JsonArrayBuilder pagesArrayBuilder = Json.createArrayBuilder();
+		//pagesArrayBuilder.add(firstPage);
+		JsonArray pagesArray = pagesArrayBuilder.build();
+		//the new file
+		newFile.add("name", fileName);
+		newFile.add("numberOfPages", "0");
+		newFile.add("pageSize", String.valueOf(PAGE_SIZE));
+		newFile.add("size", "0");
+		newFile.add("pages", pagesArray);
+		JsonObject temp = newFile.build();
+		// System.out.println(temp.toString());
+		JsonArrayBuilder filesBuilder = Json.createArrayBuilder();
+		for (int i = 0; i < files.size(); i++) {
+			filesBuilder.add(files.getJsonObject(i));
+		}
+		filesBuilder.add(temp);
+		JsonArray filesArray = filesBuilder.build();
+		JsonObjectBuilder fileObjectBuilder = Json.createObjectBuilder();
+		JsonObject filesObject = fileObjectBuilder.add("files", filesArray).build();
+		JsonObjectBuilder metadataBuilder = Json.createObjectBuilder();
+		metadataBuilder.add("metadata", filesObject);
+		JsonObject newMDObject = metadataBuilder.build();
+		String metaStr = newMDObject.toString();
+		InputStream stream = new BAInputStream(metaStr.getBytes());
+		writeMetaData(stream);
+		File f = new File("./" + String.valueOf(chord.getId()) + "/repository/" + mrPage);
+		f.createNewFile();
+	}
+
+	/**
 	 * Deletes the specified file within the metadata if it exists
 	 * 
 	 * @param fileName
@@ -409,6 +452,7 @@ public class DFS {
 					return null;
 				}
 				JsonObject lastPage = currentPages.getJsonObject(currentPages.size() - 1);
+				System.out.println(lastPage.toString());
 				InputStream is = chord.get(Long.parseLong(lastPage.getString("guid")));
 				int bytesSize = Integer.parseInt(lastPage.getString("size"));
 				byte[] data = new byte[bytesSize];
@@ -582,7 +626,7 @@ public class DFS {
 	 * Map Reduce is executed on a specified file in the DFS
 	 * @param filename The name of the file
 	 * */
-	public void runMapReduce(String filename) throws Exception {
+	public long runMapReduce(String filename) throws Exception {
 		CounterInterface mapCounter = new Counter();
 		CounterInterface reduceCounter = new Counter();
 		CounterInterface completedCounter = new Counter();
@@ -592,6 +636,7 @@ public class DFS {
 		JsonObject jrObject = jr.readObject();
 		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
 		JsonArray jrFiles = jrMetaData.getJsonArray("files");
+		long mrPage = 0L;
 		//obtain the file with name filename
 		for (JsonValue j : jrFiles) {
 			JsonObject currentFile = j.asJsonObject();
@@ -626,8 +671,13 @@ public class DFS {
 					}, 5);
 				}
 				System.out.println("Reducing complete");
-				createMapReduceFile(filename);
-				chord.completed(chord.getId(), completedCounter, filename);
+				mrPage = md5(filename + "output");
+				if(!fileExists("output")){
+					this.touchMapReduce("output", mrPage);
+				}
+				//createMapReduceFile(filename);
+				//chord.completed(chord.getId(), completedCounter, filename);
+				chord.completed(chord.getId(), completedCounter, mrPage);
 				while (completedCounter.hasCompleted() != true) {
 					// waiting for completion
 					timeoutTimer.schedule(new TimerTask() {
@@ -635,22 +685,97 @@ public class DFS {
 						public void run() {
 
 						}
-					}, 5);
+					}, 10);
 				}
 				//map reduce is now done
 				System.out.println("Map reduce completed");
+				//System.out.println("page guid for map reduce: " + mrPage);
+				//byte[] mrBytes = chord.getBytes(mrPage);
+				//appendMapReduce("output", mrPage);
 			}
 		}
+		/*if(mrPage != 0L){
+			byte[] mrBytes = chord.getBytes(mrPage);
+			appendMapReduce("output", mrBytes, mrPage);
+		}*/
+		return mrPage;
 	}
 
 	/**
-	 * Creates the directory for the map reduce output file
-	 * @param fileName The name of the file for the map reduce
+	 * Checks if a file exists in the metadata and chord directory
+	 * @param fileName The name of the file.
+	 * @return The boolean value of whether or not the file exists
 	 * */
-	public void createMapReduceFile(String fileName) throws Exception{
-		String pathStr = "mapreduce/" + chord.getId() + "/" + fileName;
-		Files.createDirectories(Paths.get(pathStr));
-		File mrFile = new File(pathStr + "/output.txt");
-		mrFile.createNewFile();
+	public Boolean fileExists(String fileName) throws Exception{
+		JsonReader jr = readMetaData();
+		JsonObject jrObject = jr.readObject();
+		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
+		JsonArray jrFilesArray = jrMetaData.getJsonArray("files");
+		for(int i=0; i < jrFilesArray.size(); i++){
+			if(jrFilesArray.getJsonObject(i).getString("name").equals(fileName)){
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Appends a map reduce page into the metadata.
+	 * @param fileName The file with which the map reduce was run on
+	 * @param pageGuid The page guid of the map reduce file
+	 * */
+	public void appendMapReduce(String fileName, long pageGuid) throws Exception{
+		JsonReader jr = readMetaData();
+		JsonObject jrObject = jr.readObject();
+		JsonObject jrMetaData = jrObject.getJsonObject("metadata");
+		JsonArray jrFilesArray = jrMetaData.getJsonArray("files");
+
+		JsonObjectBuilder mdBuilder = Json.createObjectBuilder();
+		JsonArrayBuilder filesArrayBuilder = Json.createArrayBuilder();
+
+		byte[]data = chord.getBytes(pageGuid);
+
+		for(int i=0; i < jrFilesArray.size(); i++){
+			JsonObject currFile = jrFilesArray.getJsonObject(i);
+			JsonObjectBuilder fileObjectBuilder = Json.createObjectBuilder();
+			if(currFile.getString("name").equals(fileName)){
+				int fileSize = 0;
+				JsonArray currFilePages = currFile.getJsonArray("pages");
+				JsonArrayBuilder pageArrayBuilder = Json.createArrayBuilder();
+				System.out.println(currFilePages.toString());
+				if(!currFilePages.isEmpty()){
+					pageArrayBuilder.add(currFilePages);
+					for(int j=0; j < currFilePages.size(); j++){
+						fileSize += Integer.parseInt(currFilePages.getJsonObject(j).getString("size"));
+					}
+				}
+				JsonObjectBuilder pageObjectBuilder = Json.createObjectBuilder();
+				pageObjectBuilder.add("pageNumber", String.valueOf(currFilePages.size()+1));
+				pageObjectBuilder.add("guid", String.valueOf(pageGuid));
+				pageObjectBuilder.add("size", String.valueOf(data.length));
+				pageArrayBuilder.add(pageObjectBuilder.build());
+				JsonArray pagesArray = pageArrayBuilder.build();
+				fileSize += data.length;
+				fileObjectBuilder.add("name", currFile.getString("name"));
+				fileObjectBuilder.add("numberOfPages", String.valueOf(pagesArray.size()));
+				fileObjectBuilder.add("size", String.valueOf(fileSize));
+				fileObjectBuilder.add("pages", pagesArray);
+				filesArrayBuilder.add(fileObjectBuilder.build());
+			}
+			else{
+				filesArrayBuilder.add(currFile);
+			}
+		}
+		JsonArray filesArray = filesArrayBuilder.build();
+		JsonObjectBuilder filesObjectBuilder = Json.createObjectBuilder();
+		filesObjectBuilder.add("files", filesArray);
+		JsonObject filesObject = filesObjectBuilder.build();
+		JsonObjectBuilder mdObjectBuilder = Json.createObjectBuilder();
+		mdObjectBuilder.add("metadata", filesObject);
+		JsonObject mdObject = mdObjectBuilder.build();
+		String mdStr = mdObject.toString();
+		byte[] mdBytes = mdStr.getBytes();
+		BAInputStream mdStream = new BAInputStream(mdBytes);
+		writeMetaData(mdStream);
 	}
 }

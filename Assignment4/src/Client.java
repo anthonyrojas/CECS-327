@@ -138,7 +138,12 @@ public class Client{
 					System.out.println("Running map reduce.");
 					System.out.print("Enter a file name: ");
 					fileName = in.next();
-					dfs.runMapReduce(fileName);
+					long mrPage = dfs.runMapReduce(fileName);
+					while(dfs.chord.getBytes(mrPage).length <= 0){
+						//wait for file to finish being written to
+					}
+					if(mrPage != 0L)
+						dfs.appendMapReduce("output", mrPage);
 					break;
 				case "quit":
 					System.exit(0);
